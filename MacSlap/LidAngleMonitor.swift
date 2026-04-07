@@ -14,6 +14,7 @@ class LidAngleMonitor {
 
     private var lastAngle: Double?
     private var lastDelta: Double = 0
+    private var direction: Int = 0  // -1 closing, 0 still, +1 opening
 
     // HID sensor
     private var hidManager: IOHIDManager?
@@ -60,23 +61,28 @@ class LidAngleMonitor {
         if let prev = lastAngle {
             let delta = angle - prev
 
-            if abs(delta) >= 1 {
-                // Filter noise: ±1 jitter alternates direction every tick.
-                // Real movement has same-direction consecutive deltas,
-                // OR a direction change with magnitude >= 2 (genuine reversal).
-                let isNoise = abs(delta) == 1
-                    && lastDelta != 0
-                    && (delta > 0) != (lastDelta > 0)  // Alternating sign
+            if delta != 0 {
+                let newDir = delta > 0 ? 1 : -1
 
-                if !isNoise {
+                if newDir != direction {
+                    // Direction changed — this is a reversal or start of movement.
+                    // Always trigger immediately, even for 1 degree.
+                    direction = newDir
                     lastDelta = delta
                     lastAngle = angle
                     onTick?(angle, delta)
                     return
                 }
+
+                // Same direction as before — filter ±1 noise.
+                // Noise alternates: +1, -1, +1, -1. Same-direction means real.
+                lastDelta = delta
+                lastAngle = angle
+                onTick?(angle, delta)
+                return
             }
 
-            // No significant change this tick
+            // No change this tick
             onTick?(angle, 0)
         } else {
             lastAngle = angle
