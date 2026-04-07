@@ -42,6 +42,7 @@ SWIFT_FILES=(
     "$PROJECT_DIR/MacSlap/SettingsView.swift"
     "$PROJECT_DIR/MacSlap/MenuBarView.swift"
     "$PROJECT_DIR/MacSlap/ChargerMonitor.swift"
+    "$PROJECT_DIR/MacSlap/ScreenWakeMonitor.swift"
 )
 
 swiftc \

@@ -44,6 +44,22 @@ class AppState: ObservableObject {
     @Published var lastChargerEvent: String = ""
     @Published var lastChargerTime: Date = .distantPast
 
+    // Screen wake settings
+    @Published var screenWakeSoundURL: URL? {
+        didSet { save("screenWakeSoundPath", value: screenWakeSoundURL?.path ?? "") }
+    }
+    @Published var screenSleepSoundURL: URL? {
+        didSet { save("screenSleepSoundPath", value: screenSleepSoundURL?.path ?? "") }
+    }
+    @Published var screenWakeEnabled: Bool = true {
+        didSet {
+            save("screenWakeEnabled", value: screenWakeEnabled)
+            if screenWakeEnabled { screenWakeMonitor.start() } else { screenWakeMonitor.stop() }
+        }
+    }
+    @Published var lastScreenEvent: String = ""
+    @Published var lastScreenEventTime: Date = .distantPast
+
     // Lid settings
     @Published var lidSoundURL: URL? {
         didSet { save("lidSoundPath", value: lidSoundURL?.path ?? "") }
@@ -75,6 +91,7 @@ class AppState: ObservableObject {
     let slapDetector = SlapDetector()
     let lidAngleMonitor = LidAngleMonitor()
     let chargerMonitor = ChargerMonitor()
+    let screenWakeMonitor = ScreenWakeMonitor()
     let soundManager = SoundManager()
 
     private var cancellables = Set<AnyCancellable>()
@@ -89,6 +106,7 @@ class AppState: ObservableObject {
         slapSensitivity = d.double(forKey: "slapSensitivity") > 0 ? d.double(forKey: "slapSensitivity") : 2.5
         slapCooldown = d.double(forKey: "slapCooldown") > 0 ? d.double(forKey: "slapCooldown") : 0.5
         slapEnabled = d.object(forKey: "slapEnabled") as? Bool ?? true
+        screenWakeEnabled = d.object(forKey: "screenWakeEnabled") as? Bool ?? true
         chargerEnabled = d.object(forKey: "chargerEnabled") as? Bool ?? true
         lidEnabled = d.object(forKey: "lidEnabled") as? Bool ?? true
         lidAngleThreshold = d.double(forKey: "lidAngleThreshold") > 0 ? d.double(forKey: "lidAngleThreshold") : 5.0
@@ -99,6 +117,11 @@ class AppState: ObservableObject {
 
         let lidPath = d.string(forKey: "lidSoundPath") ?? ""
         if !lidPath.isEmpty { lidSoundURL = URL(fileURLWithPath: lidPath) }
+
+        let screenWakePath = d.string(forKey: "screenWakeSoundPath") ?? ""
+        if !screenWakePath.isEmpty { screenWakeSoundURL = URL(fileURLWithPath: screenWakePath) }
+        let screenSleepPath = d.string(forKey: "screenSleepSoundPath") ?? ""
+        if !screenSleepPath.isEmpty { screenSleepSoundURL = URL(fileURLWithPath: screenSleepPath) }
 
         let chargerPlugPath = d.string(forKey: "chargerPlugSoundPath") ?? ""
         if !chargerPlugPath.isEmpty { chargerPlugSoundURL = URL(fileURLWithPath: chargerPlugPath) }
@@ -167,9 +190,26 @@ class AppState: ObservableObject {
             }
         }
 
+        screenWakeMonitor.onScreenWake = { [weak self] in
+            guard let self = self, self.isListening else { return }
+            self.lastScreenEvent = "Screen Wake"
+            self.lastScreenEventTime = Date()
+            let url = self.screenWakeSoundURL ?? URL(fileURLWithPath: "/System/Library/Sounds/Blow.aiff")
+            self.soundManager.play(url: url, volume: 1.0)
+        }
+
+        screenWakeMonitor.onScreenSleep = { [weak self] in
+            guard let self = self, self.isListening else { return }
+            self.lastScreenEvent = "Screen Sleep"
+            self.lastScreenEventTime = Date()
+            let url = self.screenSleepSoundURL ?? URL(fileURLWithPath: "/System/Library/Sounds/Purr.aiff")
+            self.soundManager.play(url: url, volume: 1.0)
+        }
+
         if slapEnabled { slapDetector.start() }
         if lidEnabled { lidAngleMonitor.start() }
         if chargerEnabled { chargerMonitor.start() }
+        if screenWakeEnabled { screenWakeMonitor.start() }
 
         // Update hardware status after a short delay to let sensors initialize
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in

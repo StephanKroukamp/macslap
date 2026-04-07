@@ -17,6 +17,12 @@ struct SettingsView: View {
                     Label("Lid Angle", systemImage: "laptopcomputer")
                 }
 
+            ScreenWakeSettingsTab()
+                .environmentObject(appState)
+                .tabItem {
+                    Label("Screen", systemImage: "lock.open.fill")
+                }
+
             ChargerSettingsTab()
                 .environmentObject(appState)
                 .tabItem {
@@ -268,6 +274,55 @@ struct LidSettingsTab: View {
     }
 }
 
+// MARK: - Screen Wake Settings
+
+struct ScreenWakeSettingsTab: View {
+    @EnvironmentObject var appState: AppState
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Enable Screen Wake/Sleep Sounds", isOn: $appState.screenWakeEnabled)
+                    .toggleStyle(.switch)
+
+                Text("Plays a sound when you open the lid, unlock, or lock your Mac.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if appState.screenWakeEnabled {
+                Section("Live Test") {
+                    DetectionIndicator(
+                        label: "Screen",
+                        icon: "lock.open.fill",
+                        lastTriggered: appState.lastScreenEventTime,
+                        detail: !appState.lastScreenEvent.isEmpty
+                            ? "Last: \(appState.lastScreenEvent)"
+                            : "Lock or unlock your Mac to test!"
+                    )
+                }
+            }
+
+            Section("Wake / Unlock Sound") {
+                SoundPicker(
+                    selectedURL: $appState.screenWakeSoundURL,
+                    defaultLabel: "Blow (Default)",
+                    soundManager: appState.soundManager
+                )
+            }
+
+            Section("Sleep / Lock Sound") {
+                SoundPicker(
+                    selectedURL: $appState.screenSleepSoundURL,
+                    defaultLabel: "Purr (Default)",
+                    soundManager: appState.soundManager
+                )
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
 // MARK: - Charger Settings
 
 struct ChargerSettingsTab: View {
@@ -437,6 +492,7 @@ struct AboutTab: View {
             VStack(alignment: .leading, spacing: 8) {
                 Label("Detects physical slaps via microphone", systemImage: "hand.raised")
                 Label("Monitors lid angle changes", systemImage: "laptopcomputer")
+                Label("Sounds on screen wake/sleep", systemImage: "lock.open.fill")
                 Label("Detects charger plug/unplug", systemImage: "bolt.fill")
                 Label("Choose your own sounds", systemImage: "speaker.wave.3")
                 Label("Volume scales with impact force", systemImage: "dial.medium")
