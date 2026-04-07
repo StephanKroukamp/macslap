@@ -214,26 +214,9 @@ class AppState: ObservableObject {
             }
         }
 
-        screenWakeMonitor.onScreenWake = { [weak self] in
-            guard let self = self, self.isListening else { return }
-            self.lastScreenEvent = "Screen Wake"
-            self.lastScreenEventTime = Date()
-            let url = self.screenWakeSoundURL ?? URL(fileURLWithPath: "/System/Library/Sounds/Blow.aiff")
-            self.soundManager.play(url: url, volume: 1.0)
-        }
-
-        screenWakeMonitor.onScreenSleep = { [weak self] in
-            guard let self = self, self.isListening else { return }
-            self.lastScreenEvent = "Screen Sleep"
-            self.lastScreenEventTime = Date()
-            let url = self.screenSleepSoundURL ?? URL(fileURLWithPath: "/System/Library/Sounds/Purr.aiff")
-            self.soundManager.play(url: url, volume: 1.0)
-        }
-
         if slapEnabled { slapDetector.start() }
         if lidEnabled { lidAngleMonitor.start() }
         if chargerEnabled { chargerMonitor.start() }
-        if screenWakeEnabled { screenWakeMonitor.start() }
 
         // Update hardware status after a short delay to let sensors initialize
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
