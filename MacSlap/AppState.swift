@@ -151,23 +151,46 @@ class AppState: ObservableObject {
             }
         }
 
-        lidAngleMonitor.onTick = { [weak self] angle, isMoving, speed in
+        // Lid: raw delta every 50ms. We handle smoothing here.
+        var ticksSinceLastChange = 0
+        let fadeAfterTicks = 8  // 400ms of no change = fade out
+
+        lidAngleMonitor.onTick = { [weak self] angle, delta in
             guard let self = self, self.isListening else { return }
             DispatchQueue.main.async {
                 self.currentLidAngle = angle
-                self.lidMovementSpeed = speed
 
-                if isMoving {
+                let absDelta = abs(delta)
+
+                if absDelta >= 2 {
+                    // Real movement (not ±1 noise)
+                    ticksSinceLastChange = 0
+                    let speed = absDelta / 0.05  // deg/s
+                    self.lidMovementSpeed = speed
                     self.lastLidDelta = speed
                     self.lastLidTriggerTime = Date()
 
-                    let volume = Float(max(0.2, min(speed / 60.0, 1.0)))
+                    let volume = Float(max(0.25, min(speed / 60.0, 1.0)))
                     let url = self.lidSoundURL ?? self.soundManager.defaultLidSound()
                     if let soundURL = url {
                         self.soundManager.updateLoopingSound(url: soundURL, volume: volume)
                     }
                 } else {
-                    self.soundManager.stopLoop()
+                    ticksSinceLastChange += 1
+
+                    if ticksSinceLastChange <= fadeAfterTicks {
+                        // Bridge gap: keep playing but fade volume
+                        let fade = Float(1.0 - Double(ticksSinceLastChange) / Double(fadeAfterTicks))
+                        let volume = max(0.05, fade * 0.5)
+                        let url = self.lidSoundURL ?? self.soundManager.defaultLidSound()
+                        if let soundURL = url {
+                            self.soundManager.updateLoopingSound(url: soundURL, volume: volume)
+                        }
+                    } else {
+                        // Fully stopped
+                        self.lidMovementSpeed = 0
+                        self.soundManager.stopLoop()
+                    }
                 }
             }
         }

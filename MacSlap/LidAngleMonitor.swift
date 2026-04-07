@@ -4,18 +4,15 @@ import IOKit.hid
 
 class LidAngleMonitor {
     var angleThreshold: Double = 5.0
-    /// Called every tick with (angle, isMoving, speed)
-    var onTick: ((Double, Bool, Double) -> Void)?
+    /// Called every tick with (angle, delta). Delta is 0 when not moving.
+    var onTick: ((Double, Double) -> Void)?
 
     private var timer: Timer?
     private var isRunning = false
     private(set) var sensorAvailable = false
-
     private let pollInterval: TimeInterval = 0.05  // 20Hz
 
-    // Sliding window of recent angle readings
-    private var samples: [(time: TimeInterval, angle: Double)] = []
-    private let windowDuration: TimeInterval = 0.5  // 500ms lookback
+    private var lastAngle: Double?
 
     // HID sensor
     private var hidManager: IOHIDManager?
@@ -51,59 +48,40 @@ class LidAngleMonitor {
         angleElement = nil
         angleDevice = nil
         isRunning = false
-        samples.removeAll()
+        lastAngle = nil
         print("[MacSlap] Lid angle monitoring stopped")
     }
 
     private func poll() {
         guard let angle = readLidAngle() else { return }
-        let now = ProcessInfo.processInfo.systemUptime
 
-        // Add to sliding window
-        samples.append((time: now, angle: angle))
+        let delta: Double
+        if let prev = lastAngle {
+            delta = angle - prev
+        } else {
+            delta = 0
+        }
 
-        // Trim samples older than the window
-        samples.removeAll { now - $0.time > windowDuration }
-
-        guard samples.count >= 2 else { return }
-
-        // Movement = range of angles in the window
-        let angles = samples.map { $0.angle }
-        let minAngle = angles.min()!
-        let maxAngle = angles.max()!
-        let range = maxAngle - minAngle
-
-        // If the angle has varied by 2+ degrees in the window, lid is moving
-        // This catches direction reversals because the window spans both directions
-        let isMoving = range >= 2.0
-
-        // Speed estimate: range / window time span
-        let timeSpan = samples.last!.time - samples.first!.time
-        let speed = timeSpan > 0 ? range / timeSpan : 0
-
-        onTick?(angle, isMoving, speed)
+        lastAngle = angle
+        onTick?(angle, delta)
     }
 
     // MARK: - HID Sensor Setup
 
     private func setupHIDSensor() -> Bool {
         let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
-
         let matchDict: [String: Any] = [
             kIOHIDDeviceUsagePageKey as String: 0x20,
             kIOHIDDeviceUsageKey as String: 138
         ]
         IOHIDManagerSetDeviceMatching(manager, matchDict as CFDictionary)
         IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.defaultMode.rawValue)
-
         let result = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         guard result == kIOReturnSuccess else { return false }
-
         guard let devices = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice>, !devices.isEmpty else {
             IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
             return false
         }
-
         for device in devices {
             guard let elements = IOHIDDeviceCopyMatchingElements(device, nil, IOOptionBits(kIOHIDOptionsTypeNone)) as? [IOHIDElement] else { continue }
             for elem in elements {
@@ -115,7 +93,6 @@ class LidAngleMonitor {
                 }
             }
         }
-
         for device in devices {
             guard let elements = IOHIDDeviceCopyMatchingElements(device, nil, IOOptionBits(kIOHIDOptionsTypeNone)) as? [IOHIDElement] else { continue }
             for elem in elements {
@@ -127,7 +104,6 @@ class LidAngleMonitor {
                 }
             }
         }
-
         IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         return false
     }
