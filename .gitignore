@@ -1,0 +1,9 @@
+build/
+*.dmg
+.DS_Store
+*.swp
+*.o
+/tmp/
+generate_icon
+generate_icon.swift
+.serena/
