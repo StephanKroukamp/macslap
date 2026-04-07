@@ -161,12 +161,20 @@ class AppState: ObservableObject {
 
                 // Volume proportional to movement speed
                 // Slow movement (~20 deg/s) = quiet, fast (~100+ deg/s) = loud
-                let volume = Float(min(speed / 80.0, 1.0))
+                let volume = Float(max(0.15, min(speed / 80.0, 1.0)))
 
                 let url = self.lidSoundURL ?? self.soundManager.defaultLidSound()
                 if let soundURL = url {
                     self.soundManager.updateLoopingSound(url: soundURL, volume: volume)
                 }
+            }
+        }
+
+        lidAngleMonitor.onMovementStopped = { [weak self] in
+            guard let self = self else { return }
+            DispatchQueue.main.async {
+                self.lidMovementSpeed = 0
+                self.soundManager.stopLoop()
             }
         }
 

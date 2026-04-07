@@ -48,18 +48,11 @@ class SoundManager {
             }
         }
 
-        // Update volume immediately
-        loopPlayer?.volume = vol
-        loopTargetVolume = vol
-
-        // Cancel any pending fade-out
-        loopFadeTimer?.invalidate()
-        loopFadeTimer = nil
-
-        // Schedule fade-out: if no update comes within 300ms, start fading
-        // Longer timeout prevents sound cutting out at direction reversals
-        loopFadeTimer = Timer.scheduledTimer(withTimeInterval: 0.30, repeats: false) { [weak self] _ in
-            self?.fadeOutLoop()
+        // Update volume immediately — smoothly interpolate to avoid pops
+        if let player = loopPlayer {
+            let current = player.volume
+            // Smooth volume changes to avoid clicks
+            player.volume = current + (vol - current) * 0.4
         }
     }
 
