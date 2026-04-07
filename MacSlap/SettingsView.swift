@@ -17,12 +17,6 @@ struct SettingsView: View {
                     Label("Lid Angle", systemImage: "laptopcomputer")
                 }
 
-            ScreenWakeSettingsTab()
-                .environmentObject(appState)
-                .tabItem {
-                    Label("Screen", systemImage: "lock.open.fill")
-                }
-
             ChargerSettingsTab()
                 .environmentObject(appState)
                 .tabItem {
