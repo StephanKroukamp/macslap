@@ -13,6 +13,7 @@ class SlapDetector {
 
     private var lastSlapTime: Date = .distantPast
     private var isRunning = false
+    private(set) var sensorAvailable = false
 
     // HID accelerometer
     private var hidManager: IOHIDManager?
@@ -27,8 +28,10 @@ class SlapDetector {
         isRunning = true
 
         if setupAccelerometer() {
+            sensorAvailable = true
             print("[MacSlap] Slap detection started (accelerometer)")
         } else {
+            sensorAvailable = false
             print("[MacSlap] Accelerometer not found — slap detection unavailable")
         }
     }

@@ -68,6 +68,10 @@ class AppState: ObservableObject {
     @Published var lastLidDelta: Double = 0
     @Published var lidMovementSpeed: Double = 0  // degrees/second
 
+    // Hardware status
+    @Published var slapSensorAvailable: Bool = false
+    @Published var lidSensorAvailable: Bool = false
+
     let slapDetector = SlapDetector()
     let lidAngleMonitor = LidAngleMonitor()
     let chargerMonitor = ChargerMonitor()
@@ -166,6 +170,13 @@ class AppState: ObservableObject {
         if slapEnabled { slapDetector.start() }
         if lidEnabled { lidAngleMonitor.start() }
         if chargerEnabled { chargerMonitor.start() }
+
+        // Update hardware status after a short delay to let sensors initialize
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self else { return }
+            self.slapSensorAvailable = self.slapDetector.sensorAvailable
+            self.lidSensorAvailable = self.lidAngleMonitor.sensorAvailable
+        }
     }
 
     private func save(_ key: String, value: Any) {

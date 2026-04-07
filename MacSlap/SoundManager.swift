@@ -56,8 +56,9 @@ class SoundManager {
         loopFadeTimer?.invalidate()
         loopFadeTimer = nil
 
-        // Schedule fade-out: if no update comes within 150ms, start fading
-        loopFadeTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { [weak self] _ in
+        // Schedule fade-out: if no update comes within 300ms, start fading
+        // Longer timeout prevents sound cutting out at direction reversals
+        loopFadeTimer = Timer.scheduledTimer(withTimeInterval: 0.30, repeats: false) { [weak self] _ in
             self?.fadeOutLoop()
         }
     }

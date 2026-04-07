@@ -11,6 +11,7 @@ class LidAngleMonitor {
     private var isRunning = false
     private var previousAngle: Double?
     private var pollInterval: TimeInterval = 0.05  // 20Hz for smooth tracking
+    private(set) var sensorAvailable = false
 
     // HID sensor
     private var hidManager: IOHIDManager?
@@ -28,8 +29,10 @@ class LidAngleMonitor {
                     self?.pollAngle()
                 }
             }
+            sensorAvailable = true
             print("[MacSlap] Lid angle monitoring started (SPU sensor, 20Hz)")
         } else {
+            sensorAvailable = false
             print("[MacSlap] Lid angle sensor not found on this Mac")
         }
     }

@@ -101,6 +101,34 @@ struct DetectionIndicator: View {
     }
 }
 
+// MARK: - Hardware Error Banner
+
+struct HardwareErrorBanner: View {
+    let message: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.white)
+                .font(.title3)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Hardware Not Available")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.85))
+            }
+            Spacer()
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.red.opacity(0.85))
+        )
+    }
+}
+
 // MARK: - Slap Settings
 
 struct SlapSettingsTab: View {
@@ -108,6 +136,14 @@ struct SlapSettingsTab: View {
 
     var body: some View {
         Form {
+            if appState.slapEnabled && !appState.slapSensorAvailable {
+                Section {
+                    HardwareErrorBanner(
+                        message: "Accelerometer not found. Requires Apple Silicon M1 Pro or later. Standard M1 and Intel Macs are not supported."
+                    )
+                }
+            }
+
             Section {
                 Toggle("Enable Slap Detection", isOn: $appState.slapEnabled)
                     .toggleStyle(.switch)
@@ -175,6 +211,14 @@ struct LidSettingsTab: View {
 
     var body: some View {
         Form {
+            if appState.lidEnabled && !appState.lidSensorAvailable {
+                Section {
+                    HardwareErrorBanner(
+                        message: "Lid angle sensor not found. Requires Apple Silicon M1 Pro or later with SPU hinge sensor."
+                    )
+                }
+            }
+
             Section {
                 Toggle("Enable Lid Angle Detection", isOn: $appState.lidEnabled)
                     .toggleStyle(.switch)
