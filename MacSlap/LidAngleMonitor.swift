@@ -4,22 +4,18 @@ import IOKit.hid
 
 class LidAngleMonitor {
     var angleThreshold: Double = 5.0
-    /// Called every tick with (angle, isMoving, speed). Always called so the
-    /// caller can manage sound start/stop smoothly.
+    /// Called every tick with (angle, isMoving, speed)
     var onTick: ((Double, Bool, Double) -> Void)?
 
     private var timer: Timer?
     private var isRunning = false
     private(set) var sensorAvailable = false
 
-    // Angle tracking
-    private var lastAngle: Double?
-    private var lastChangeTime: TimeInterval = 0
-    private var lastSpeed: Double = 0
     private let pollInterval: TimeInterval = 0.05  // 20Hz
-    // How long after the last detected change we still consider "moving"
-    // Bridges gaps between integer degree steps at slow speeds
-    private let movingTimeout: TimeInterval = 0.4
+
+    // Sliding window of recent angle readings
+    private var samples: [(time: TimeInterval, angle: Double)] = []
+    private let windowDuration: TimeInterval = 0.5  // 500ms lookback
 
     // HID sensor
     private var hidManager: IOHIDManager?
@@ -55,8 +51,7 @@ class LidAngleMonitor {
         angleElement = nil
         angleDevice = nil
         isRunning = false
-        lastAngle = nil
-        lastSpeed = 0
+        samples.removeAll()
         print("[MacSlap] Lid angle monitoring stopped")
     }
 
@@ -64,33 +59,27 @@ class LidAngleMonitor {
         guard let angle = readLidAngle() else { return }
         let now = ProcessInfo.processInfo.systemUptime
 
-        if let prev = lastAngle {
-            let delta = abs(angle - prev)
+        // Add to sliding window
+        samples.append((time: now, angle: angle))
 
-            if delta >= 2 {
-                // Real movement detected (not noise)
-                lastSpeed = delta / pollInterval
-                lastChangeTime = now
-                lastAngle = angle
-            }
-            // else: angle didn't change (or noise) — don't update lastAngle
-        } else {
-            lastAngle = angle
-            lastChangeTime = now
-        }
+        // Trim samples older than the window
+        samples.removeAll { now - $0.time > windowDuration }
 
-        // Are we "moving"? Yes if we saw a change recently
-        let timeSinceChange = now - lastChangeTime
-        let isMoving = timeSinceChange < movingTimeout && lastSpeed > 0
+        guard samples.count >= 2 else { return }
 
-        // Decay speed smoothly after movement stops
-        let speed: Double
-        if isMoving {
-            let decay = max(0, 1.0 - timeSinceChange / movingTimeout)
-            speed = lastSpeed * decay
-        } else {
-            speed = 0
-        }
+        // Movement = range of angles in the window
+        let angles = samples.map { $0.angle }
+        let minAngle = angles.min()!
+        let maxAngle = angles.max()!
+        let range = maxAngle - minAngle
+
+        // If the angle has varied by 2+ degrees in the window, lid is moving
+        // This catches direction reversals because the window spans both directions
+        let isMoving = range >= 2.0
+
+        // Speed estimate: range / window time span
+        let timeSpan = samples.last!.time - samples.first!.time
+        let speed = timeSpan > 0 ? range / timeSpan : 0
 
         onTick?(angle, isMoving, speed)
     }
@@ -127,7 +116,6 @@ class LidAngleMonitor {
             }
         }
 
-        // Fallback
         for device in devices {
             guard let elements = IOHIDDeviceCopyMatchingElements(device, nil, IOOptionBits(kIOHIDOptionsTypeNone)) as? [IOHIDElement] else { continue }
             for elem in elements {
