@@ -151,26 +151,26 @@ class AppState: ObservableObject {
             }
         }
 
-        // Lid: raw delta every 50ms. We handle smoothing here.
+        // Lid: raw delta every 20ms at 50Hz. Speed-proportional volume.
         var ticksSinceLastChange = 0
-        let fadeAfterTicks = 8  // 400ms of no change = fade out
+        let fadeAfterTicks = 15  // 300ms at 50Hz before stopping
 
         lidAngleMonitor.onTick = { [weak self] angle, delta in
             guard let self = self, self.isListening else { return }
             DispatchQueue.main.async {
                 self.currentLidAngle = angle
-
                 let absDelta = abs(delta)
 
-                if absDelta >= 2 {
-                    // Real movement (not ±1 noise)
+                if absDelta >= 1 {
+                    // Movement detected
                     ticksSinceLastChange = 0
-                    let speed = absDelta / 0.05  // deg/s
+                    let speed = absDelta / 0.02  // deg/s (at 50Hz, each tick = 20ms)
                     self.lidMovementSpeed = speed
                     self.lastLidDelta = speed
                     self.lastLidTriggerTime = Date()
 
-                    let volume = Float(max(0.25, min(speed / 60.0, 1.0)))
+                    // Volume: slow (~20 deg/s) = 0.2, fast (~80+ deg/s) = 1.0
+                    let volume = Float(max(0.2, min(speed / 80.0, 1.0)))
                     let url = self.lidSoundURL ?? self.soundManager.defaultLidSound()
                     if let soundURL = url {
                         self.soundManager.updateLoopingSound(url: soundURL, volume: volume)
@@ -179,15 +179,13 @@ class AppState: ObservableObject {
                     ticksSinceLastChange += 1
 
                     if ticksSinceLastChange <= fadeAfterTicks {
-                        // Bridge gap: keep playing but fade volume
+                        // Keep player alive, fade volume smoothly
                         let fade = Float(1.0 - Double(ticksSinceLastChange) / Double(fadeAfterTicks))
-                        let volume = max(0.05, fade * 0.5)
                         let url = self.lidSoundURL ?? self.soundManager.defaultLidSound()
                         if let soundURL = url {
-                            self.soundManager.updateLoopingSound(url: soundURL, volume: volume)
+                            self.soundManager.updateLoopingSound(url: soundURL, volume: max(0.02, fade * 0.3))
                         }
                     } else {
-                        // Fully stopped
                         self.lidMovementSpeed = 0
                         self.soundManager.stopLoop()
                     }

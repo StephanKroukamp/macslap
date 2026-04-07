@@ -4,15 +4,16 @@ import IOKit.hid
 
 class LidAngleMonitor {
     var angleThreshold: Double = 5.0
-    /// Called every tick with (angle, delta). Delta is 0 when not moving.
+    /// Called every tick with (angle, delta)
     var onTick: ((Double, Double) -> Void)?
 
     private var timer: Timer?
     private var isRunning = false
     private(set) var sensorAvailable = false
-    private let pollInterval: TimeInterval = 0.05  // 20Hz
+    private let pollInterval: TimeInterval = 0.02  // 50Hz for fast response
 
     private var lastAngle: Double?
+    private var lastDelta: Double = 0
 
     // HID sensor
     private var hidManager: IOHIDManager?
@@ -31,7 +32,7 @@ class LidAngleMonitor {
                     self?.poll()
                 }
             }
-            print("[MacSlap] Lid angle monitoring started")
+            print("[MacSlap] Lid angle monitoring started (50Hz)")
         } else {
             sensorAvailable = false
             print("[MacSlap] Lid angle sensor not found")
@@ -49,24 +50,40 @@ class LidAngleMonitor {
         angleDevice = nil
         isRunning = false
         lastAngle = nil
+        lastDelta = 0
         print("[MacSlap] Lid angle monitoring stopped")
     }
 
     private func poll() {
         guard let angle = readLidAngle() else { return }
 
-        let delta: Double
         if let prev = lastAngle {
-            delta = angle - prev
-        } else {
-            delta = 0
-        }
+            let delta = angle - prev
 
-        lastAngle = angle
-        onTick?(angle, delta)
+            if abs(delta) >= 1 {
+                // Filter noise: ±1 jitter alternates direction every tick.
+                // Real movement has same-direction consecutive deltas,
+                // OR a direction change with magnitude >= 2 (genuine reversal).
+                let isNoise = abs(delta) == 1
+                    && lastDelta != 0
+                    && (delta > 0) != (lastDelta > 0)  // Alternating sign
+
+                if !isNoise {
+                    lastDelta = delta
+                    lastAngle = angle
+                    onTick?(angle, delta)
+                    return
+                }
+            }
+
+            // No significant change this tick
+            onTick?(angle, 0)
+        } else {
+            lastAngle = angle
+        }
     }
 
-    // MARK: - HID Sensor Setup
+    // MARK: - HID Sensor
 
     private func setupHIDSensor() -> Bool {
         let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
