@@ -56,14 +56,16 @@ class LidAngleMonitor {
 
         if let prev = previousAngle {
             let delta = angle - prev
-            if abs(delta) > 0.5 {  // Filter noise (> 0.5 degree)
-                // Angular speed in degrees per second
+            // Sensor reports integers, so ignore ±1 degree noise
+            if abs(delta) >= 2 {
                 let speed = abs(delta) / pollInterval
                 onMovement?(angle, speed)
+                previousAngle = angle
             }
+            // Don't update previousAngle on noise — only on real movement
+        } else {
+            previousAngle = angle
         }
-
-        previousAngle = angle
     }
 
     // MARK: - HID Sensor Setup
