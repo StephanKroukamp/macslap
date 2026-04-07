@@ -55,31 +55,44 @@ class LidAngleMonitor {
         print("[MacSlap] Lid angle monitoring stopped")
     }
 
+    private var confirmCount = 0  // Consecutive same-direction ticks
+
     private func poll() {
         guard let angle = readLidAngle() else { return }
 
         if let prev = lastAngle {
             let delta = angle - prev
 
-            if delta != 0 {
+            if abs(delta) >= 1 {
                 let newDir = delta > 0 ? 1 : -1
 
-                if newDir != direction {
-                    // Direction changed — this is a reversal or start of movement.
-                    // Always trigger immediately, even for 1 degree.
-                    direction = newDir
+                if newDir == direction {
+                    // Same direction again — confirmed real movement
+                    confirmCount += 1
                     lastDelta = delta
                     lastAngle = angle
                     onTick?(angle, delta)
                     return
+                } else {
+                    // Direction changed (or first movement)
+                    if abs(delta) >= 2 {
+                        // Big jump = definitely real, trigger immediately
+                        direction = newDir
+                        confirmCount = 1
+                        lastDelta = delta
+                        lastAngle = angle
+                        onTick?(angle, delta)
+                        return
+                    } else {
+                        // 1-degree change in new direction — could be noise.
+                        // Wait for confirmation: don't update lastAngle so next
+                        // tick can confirm with another same-direction change.
+                        direction = newDir
+                        confirmCount = 0
+                        onTick?(angle, 0)
+                        return
+                    }
                 }
-
-                // Same direction as before — filter ±1 noise.
-                // Noise alternates: +1, -1, +1, -1. Same-direction means real.
-                lastDelta = delta
-                lastAngle = angle
-                onTick?(angle, delta)
-                return
             }
 
             // No change this tick
